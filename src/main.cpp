@@ -5,6 +5,8 @@
 #include <SDL3/SDL_mouse.h>
 #include <glad/glad.h>      // Loader para funciones OpenGL modernas
 #include <glm.hpp>
+#include <iostream>
+#include <ostream>
 #include <gtc/matrix_transform.hpp>
 #include <gtc/type_ptr.hpp>
 
@@ -12,8 +14,21 @@
 static SDL_Window *window = nullptr;
 static SDL_GLContext context = nullptr;
 
+uint64_t lastFrame = 0;
+uint64_t currentFrame = 0;
+float deltaTime = 0.0f;
+
+// TEMPORAL Lo correcto seria usar una clase para el objeto e ir alterando su rotacion ahi, o algo.
+float totalRotation = 0.0f;
+
+unsigned int gProgramID = 0;
+
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 typedef struct AppState {
     unsigned int VBO, VAO; // Vertex Buffer Object y Vertex Array Object
@@ -51,15 +66,50 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         return SDL_APP_FAILURE;
     }
 
-    const char *version = (const char *) glGetString(GL_VERSION);
-    const char *vendor = (const char *) glGetString(GL_VENDOR);
-    const char *renderer = (const char *) glGetString(GL_RENDERER);
-    const char *glsl_version = (const char *) glGetString(GL_SHADING_LANGUAGE_VERSION);
+    // SHADER
+    const char *vertexShaderSource = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
 
-    SDL_Log("OpenGL Version: %s", version);
-    SDL_Log("Vendor: %s", vendor);
-    SDL_Log("Renderer: %s", renderer);
-    SDL_Log("GLSL Version: %s", glsl_version);
+uniform mat4 model;
+uniform mat4 projection;
+uniform mat4 view;
+
+void main()
+{
+	gl_Position =projection * view * model * vec4(aPos, 1.0);
+}
+)";
+    const char *fragmentShaderSource = R"(
+#version 330 core
+out vec4 FragColor;
+
+
+void main()
+{
+	FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}
+)";
+
+    unsigned int vertex, fragment;
+
+    // Crear programa OpenGL para shaders
+    gProgramID = glCreateProgram();
+    vertex = glCreateShader(GL_VERTEX_SHADER);
+    fragment = glCreateShader(GL_FRAGMENT_SHADER);
+
+    glShaderSource(vertex, 1, &vertexShaderSource, nullptr);
+    glCompileShader(vertex);
+
+    glShaderSource(fragment, 1, &fragmentShaderSource, nullptr);
+    glCompileShader(fragment);
+
+    glAttachShader(gProgramID, vertex);
+    glAttachShader(gProgramID, fragment);
+    glLinkProgram(gProgramID);
+
+    glDeleteShader(vertex);
+    glDeleteShader(fragment);
 
     // Inicializar estado de la aplicación
     AppState *state = new AppState;
@@ -136,14 +186,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) 0);
     glEnableVertexAttribArray(0); // Habilitar atributo de posición
 
+    glUseProgram(gProgramID);
+
+
     *appstate = state; // Pasar estado a SDL
+    SDL_GL_SetSwapInterval(1);
+
+    lastFrame = SDL_GetTicksNS();
 
     return SDL_APP_CONTINUE;
 }
 
-// EVENTOS: Se ejecuta cuando hay eventos (teclado, mouse, etc.)
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
-    AppState *state = static_cast<AppState*> (appstate);
+    AppState *state = static_cast<AppState *>(appstate);
 
     // Manejar cierre de ventana
     if (event->type == SDL_EVENT_QUIT) {
@@ -153,15 +208,36 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     return SDL_APP_CONTINUE;
 }
 
-// BUCLE PRINCIPAL: Se ejecuta cada frame para renderizar
 SDL_AppResult SDL_AppIterate(void *appstate) {
     AppState *state = static_cast<AppState *>(appstate);
+
+    // Delta Time
+    currentFrame = SDL_GetTicksNS();
+    deltaTime = static_cast<float>(currentFrame - lastFrame) / 1000000000.0f;
+    lastFrame = currentFrame;
 
     // RENDERIZADO:
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f); // Color de fondo (gris-azulado)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpiar buffers
 
+    glUseProgram(gProgramID);
+
+
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), static_cast<float>(WINDOW_WIDTH / WINDOW_HEIGHT), 0.1f,
+                                            100.0f);
+    glUniformMatrix4fv(glGetUniformLocation(gProgramID, "projection"), 1, GL_FALSE, &projection[0][0]);
+
+    glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    glUniformMatrix4fv(glGetUniformLocation(gProgramID, "view"), 1, GL_FALSE, &view[0][0]);
+
     glBindVertexArray(state->VAO); // Activar configuración de vértices
+
+    glm::mat4 model = glm::mat4(1.0f);
+    float speed = 20.0f;
+    totalRotation += deltaTime * speed;
+    model = glm::rotate(model, glm::radians(totalRotation), glm::vec3(1.0f, 0.3f, 0.5f));
+
+    glUniformMatrix4fv(glGetUniformLocation(gProgramID, "model"), 1, GL_FALSE, &model[0][0]);
 
     glDrawArrays(GL_TRIANGLES, 0, 36); // Dibujar 36 vértices como triángulos (12 triángulos = 6 caras)
 
@@ -170,7 +246,6 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     return SDL_APP_CONTINUE;
 }
 
-// LIMPIEZA: Se ejecuta al cerrar la aplicación
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     AppState *state = static_cast<AppState *>(appstate);
 
