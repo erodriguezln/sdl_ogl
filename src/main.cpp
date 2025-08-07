@@ -10,6 +10,8 @@
 #include <gtc/matrix_transform.hpp>
 #include <gtc/type_ptr.hpp>
 
+#include "Shader.h"
+
 // Variables globales para ventana y contexto OpenGL
 static SDL_Window *window = nullptr;
 static SDL_GLContext context = nullptr;
@@ -21,8 +23,6 @@ float deltaTime = 0.0f;
 // TEMPORAL Lo correcto seria usar una clase para el objeto e ir alterando su rotacion ahi, o algo.
 float totalRotation = 0.0f;
 
-unsigned int gProgramID = 0;
-
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
@@ -32,6 +32,7 @@ glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 typedef struct AppState {
     unsigned int VBO, VAO; // Vertex Buffer Object y Vertex Array Object
+    Shader shader;
 } AppState;
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
@@ -66,54 +67,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
         return SDL_APP_FAILURE;
     }
 
-    // SHADER
-    const char *vertexShaderSource = R"(
-#version 330 core
-layout (location = 0) in vec3 aPos;
-
-uniform mat4 model;
-uniform mat4 projection;
-uniform mat4 view;
-
-void main()
-{
-	gl_Position =projection * view * model * vec4(aPos, 1.0);
-}
-)";
-    const char *fragmentShaderSource = R"(
-#version 330 core
-out vec4 FragColor;
-
-
-void main()
-{
-	FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-}
-)";
-
-    unsigned int vertex, fragment;
-
-    // Crear programa OpenGL para shaders
-    gProgramID = glCreateProgram();
-    vertex = glCreateShader(GL_VERTEX_SHADER);
-    fragment = glCreateShader(GL_FRAGMENT_SHADER);
-
-    glShaderSource(vertex, 1, &vertexShaderSource, nullptr);
-    glCompileShader(vertex);
-
-    glShaderSource(fragment, 1, &fragmentShaderSource, nullptr);
-    glCompileShader(fragment);
-
-    glAttachShader(gProgramID, vertex);
-    glAttachShader(gProgramID, fragment);
-    glLinkProgram(gProgramID);
-
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    // Inicializar estado de la aplicación
-    AppState *state = new AppState;
+    // Constructor se llama por defecto por lo que se debe asignar
+    // Shader ahora, ya que es un objeto no puntero.
+    AppState *state = new AppState{
+        0, 0,
+        Shader("assets/shaders/shader.vert", "assets/shaders/shader.frag")
+    };
     state->VAO = 0;
+
 
     // Habilitar test de profundidad para 3D correcto
     glEnable(GL_DEPTH_TEST);
@@ -186,7 +147,8 @@ void main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *) 0);
     glEnableVertexAttribArray(0); // Habilitar atributo de posición
 
-    glUseProgram(gProgramID);
+    // porque shader-> en vez de shader.use()
+    state->shader.use();
 
 
     *appstate = state; // Pasar estado a SDL
@@ -220,24 +182,23 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f); // Color de fondo (gris-azulado)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpiar buffers
 
-    glUseProgram(gProgramID);
-
+    state->shader.use();
 
     glm::mat4 projection = glm::perspective(glm::radians(45.0f), static_cast<float>(WINDOW_WIDTH / WINDOW_HEIGHT), 0.1f,
                                             100.0f);
-    glUniformMatrix4fv(glGetUniformLocation(gProgramID, "projection"), 1, GL_FALSE, &projection[0][0]);
+    state->shader.setMat4("projection", projection);
 
     glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-    glUniformMatrix4fv(glGetUniformLocation(gProgramID, "view"), 1, GL_FALSE, &view[0][0]);
+    state->shader.setMat4("view", view);
 
     glBindVertexArray(state->VAO); // Activar configuración de vértices
 
     glm::mat4 model = glm::mat4(1.0f);
     float speed = 20.0f;
     totalRotation += deltaTime * speed;
-    model = glm::rotate(model, glm::radians(totalRotation), glm::vec3(1.0f, 0.3f, 0.5f));
 
-    glUniformMatrix4fv(glGetUniformLocation(gProgramID, "model"), 1, GL_FALSE, &model[0][0]);
+    model = glm::rotate(model, glm::radians(totalRotation), glm::vec3(1.0f, 0.3f, 0.5f));
+    state->shader.setMat4("model", model);
 
     glDrawArrays(GL_TRIANGLES, 0, 36); // Dibujar 36 vértices como triángulos (12 triángulos = 6 caras)
 
