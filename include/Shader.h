@@ -73,6 +73,10 @@ public:
         // por qué &mat (&?) si ya se esta pasando como referencia?
         glUniformMatrix4fv(glGetUniformLocation(id, name.c_str()), 1, GL_FALSE, &mat[0][0]);
     }
+
+    void setInt(const std::string &name, int value) const {
+        glUniform1i(glGetUniformLocation(id, name.c_str()), value);
+    }
 };
 
 
