@@ -103,10 +103,14 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
     Texture awesomeface("assets/awesomeface.png");
 
     // activa texture0 y bindea el id de textura wood a esa textura
-    glBindTextureUnit(0, wood.getID());
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, wood.getID());
+    // glBindTextureUnit(0, wood.getID());
 
     // activa texture1 y bindea el id de textura awesomeface a esa textura
-    glBindTextureUnit(1, awesomeface.getID());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, awesomeface.getID());
+    // glBindTextureUnit(1, awesomeface.getID());
 
     // Constructor se llama por defecto por lo que se debe asignar
     // Shader ahora, ya que es un objeto no puntero.
