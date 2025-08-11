@@ -9,10 +9,12 @@
 #ifndef SHADER_H
 #define SHADER_H
 
-
+// TODO separar en cpp/h y generar log and check errors
 class Shader {
 public:
     unsigned int id;
+    unsigned int vertex;
+    unsigned int fragment;
 
     Shader(const char *vertexPath, const char *fragmentPath) {
         std::string vertexSource;
@@ -43,21 +45,28 @@ public:
         const char *vertexCode = vertexSource.c_str();
         const char *fragmentCode = fragmentSource.c_str();
 
-        unsigned int vertex, fragment;
+        compileVertexShader(vertexCode);
+        compileFragmentShader(fragmentCode);
+        createShaderProgram();
+    }
 
+    void compileVertexShader(const char *vertexCode) {
         vertex = glCreateShader(GL_VERTEX_SHADER);
-        fragment = glCreateShader(GL_FRAGMENT_SHADER);
-
         glShaderSource(vertex, 1, &vertexCode, nullptr);
         glCompileShader(vertex);
+    }
 
+    void compileFragmentShader(const char *fragmentCode) {
+        fragment = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragment, 1, &fragmentCode, nullptr);
         glCompileShader(fragment);
+    }
 
-
+    void createShaderProgram() {
         id = glCreateProgram();
         glAttachShader(id, vertex);
         glAttachShader(id, fragment);
+
         glLinkProgram(id);
 
         glDeleteShader(vertex);
@@ -68,10 +77,13 @@ public:
         glUseProgram(id);
     }
 
-    // por qué por referencia?, imagion que para no pasar copia? ya que es const
     void setMat4(const std::string &name, const glm::mat4 &mat) const {
         // por qué &mat (&?) si ya se esta pasando como referencia?
         glUniformMatrix4fv(glGetUniformLocation(id, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+    }
+
+    void setVec3(const std::string &name, const glm::vec3 &value) const {
+        glUniform3fv(glGetUniformLocation(id, name.c_str()), 1, &value[0]);
     }
 
     void setInt(const std::string &name, int value) const {
