@@ -114,15 +114,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 
     // Constructor se llama por defecto por lo que se debe asignar
     // Shader ahora, ya que es un objeto no puntero.
-    AppState* state = new AppState{
+    auto* state = new AppState{
         0, 0, 0,
         Shader(
-            "assets/shaders/cube.vert",
-            "assets/shaders/cube.frag"
+            "shaders/cube.vert",
+            "shaders/cube.frag"
         ),
         Shader(
-            "assets/shaders/light.vert",
-            "assets/shaders/light.frag"
+            "shaders/light.vert",
+            "shaders/light.frag"
         )
     };
 
@@ -260,10 +260,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
     glVertexAttribPointer(0, 3,GL_FLOAT,GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // state->cubeShader.use();
-    // state->cubeShader.setInt("texture1", 0);
-    // state->cubeShader.setInt("texture2", 1);
-
 
     *appstate = state; // Pasar estado a SDL
     SDL_GL_SetSwapInterval(1);
@@ -310,10 +306,11 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
-    AppState* state = static_cast<AppState*>(appstate);
+    auto* state = static_cast<AppState*>(appstate);
 
     // TODO temporal, abstraer
     glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
+    // glm::vec3 lightPos(0.8f, 1.0f, .0f);
 
     const bool* keys = SDL_GetKeyboardState(nullptr);
 
@@ -349,28 +346,29 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     state->cubeShader.setVec3("objectColor", glm::vec3(1.0f, 0.5f, 0.31f));
     state->cubeShader.setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
     state->cubeShader.setVec3("lightPos", lightPos);
-    float aspect = static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT);
-    glm::mat4 projection = glm::perspective(glm::radians(state->camera->fov), aspect, 0.1f, 100.0f);
+    state->cubeShader.setVec3("viewPos", state->camera->position);
+
+    glm::mat4 projection = glm::perspective(glm::radians(state->camera->fov), static_cast<float>(WINDOW_WIDTH) / static_cast<float>(WINDOW_HEIGHT), 0.1f, 100.0f);
     glm::mat4 view = state->camera->getViewMatrix();
     state->cubeShader.setMat4("projection", projection);
     state->cubeShader.setMat4("view", view);
 
-    glm::mat4 model = glm::mat4(1.0f);
-    float speed = 20.0f;
+    auto model = glm::mat4(1.0f);
+    constexpr float speed = 20.0f;
     totalRotation += deltaTime * speed;
-    model = glm::rotate(model, glm::radians(totalRotation), glm::vec3(1.0f, 0.3f, 0.5f));
+    // model = glm::rotate(model, glm::radians(totalRotation), glm::vec3(1.0f, 0.3f, 0.5f));
     state->cubeShader.setMat4("model", model);
 
     // Render cube
     glBindVertexArray(state->cubeVAO); // Activar configuración de vértices
     glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0); // Desvincular después de dibujar
 
     // Light Cube
     state->lightShader.use();
     state->lightShader.setMat4("projection", projection);
     state->lightShader.setMat4("view", view);
-    model = glm::mat4(1.0f);
-    model = glm::translate(model, lightPos); // Posición del cubo de luz
+    model = glm::translate(glm::mat4(1.0f), lightPos); // Posición del cubo de luz
     model = glm::scale(model, glm::vec3(0.2f));
     state->lightShader.setMat4("model", model);
 

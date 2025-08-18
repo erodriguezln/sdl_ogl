@@ -26,7 +26,32 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${GLAD_SOURCES})
 # Link against SDL3 and SDL3_image libraries
 target_link_libraries(${PROJECT_NAME} SDL3::SDL3 SDL3_image::SDL3_image)
 
+# Detectar archivos de shaders
+file(GLOB SHADER_FILES
+        "${CMAKE_SOURCE_DIR}/shaders/*.vert"
+        "${CMAKE_SOURCE_DIR}/shaders/*.frag"
+)
+
+# Crear target personalizado para copiar shaders cuando cambien
+add_custom_target(copy-shaders ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/shaders"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders"
+        DEPENDS ${SHADER_FILES}
+        COMMENT "Copying shaders to build directory"
+)
+
+# Copiar assets en POST_BUILD
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets")
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
+        COMMENT "Copying assets to build directory"
+)
+
+# Hacer que el ejecutable dependa de copy-shaders
+add_dependencies(${PROJECT_NAME} copy-shaders)
+
+# Mensaje de información útil
+message(STATUS "Shaders will be copied from: ${CMAKE_SOURCE_DIR}/shaders")
+message(STATUS "Shaders will be copied to: $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders")
